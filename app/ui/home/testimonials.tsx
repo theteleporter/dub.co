@@ -27,7 +27,7 @@ export default async function Testimonials() {
   const [userCount, tweetsData] = await Promise.all([
     prisma.user.count(),
     (
-      await Promise.all(tweets.map((id) => getTweet(id)))
+      await Promise.all(tweets.map((id) => getTweet(id).catch(() => null)))
     ).filter((t) => t) as TweetProps[],
   ]);
 
