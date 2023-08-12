@@ -31,9 +31,6 @@ export default function Home() {
         <Testimonials />
       </Suspense>
       <Changelog />
-      <Suspense fallback={<OSSSection stars={10000} />}>
-        <OSS />
-      </Suspense>
     </>
   );
 }
