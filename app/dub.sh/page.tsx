@@ -27,10 +27,10 @@ export default function Home() {
         <Stats />
       </Suspense>
       <Features />
-      <Suspense>
-        <Testimonials />
-      </Suspense>
       <Changelog />
+      <Suspense fallback={<OSSSection stars={10000} />}>
+        <OSS />
+      </Suspense>
     </>
   );
 }
