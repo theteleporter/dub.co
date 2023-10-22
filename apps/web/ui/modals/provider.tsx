@@ -1,6 +1,5 @@
 "use client";
 
-import useProject from "@/lib/swr/use-project";
 import { useAddEditDomainModal } from "@/ui/modals/add-edit-domain-modal";
 import { useAddEditLinkModal } from "@/ui/modals/add-edit-link-modal";
 import { useAddProjectModal } from "@/ui/modals/add-project-modal";
@@ -8,7 +7,6 @@ import { useCompleteSetupModal } from "@/ui/modals/complete-setup-modal";
 import { useImportBitlyModal } from "@/ui/modals/import-bitly-modal";
 import { useImportShortModal } from "@/ui/modals/import-short-modal";
 import { useUpgradePlanModal } from "@/ui/modals/upgrade-plan-modal";
-import { useAcceptInviteModal } from "@/ui/modals/accept-invite-modal";
 import { getQueryString } from "@dub/utils";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -47,8 +45,6 @@ export default function ModalProvider({ children }: { children: ReactNode }) {
     useCompleteSetupModal();
   const { setShowAddEditDomainModal, AddEditDomainModal } =
     useAddEditDomainModal();
-  const { AcceptInviteModal, setShowAcceptInviteModal } =
-    useAcceptInviteModal();
   const { setShowAddEditLinkModal, AddEditLinkModal } = useAddEditLinkModal();
   const { setShowUpgradePlanModal, UpgradePlanModal } = useUpgradePlanModal();
   const { setShowImportBitlyModal, ImportBitlyModal } = useImportBitlyModal();
@@ -85,15 +81,6 @@ export default function ModalProvider({ children }: { children: ReactNode }) {
     }
   }, [pollLinks]);
 
-  const { error } = useProject();
-
-  // handle invite and oauth modals
-  useEffect(() => {
-    if (error && (error.status === 409 || error.status === 410)) {
-      setShowAcceptInviteModal(true);
-    }
-  }, [error]);
-
   return (
     <ModalContext.Provider
       value={{
@@ -108,7 +95,6 @@ export default function ModalProvider({ children }: { children: ReactNode }) {
       }}
     >
       <AddProjectModal />
-      <AcceptInviteModal />
       <CompleteSetupModal />
       <AddEditDomainModal />
       <AddEditLinkModal />

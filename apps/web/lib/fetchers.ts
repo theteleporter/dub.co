@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { getSession } from "./auth-app";
 import prisma from "./prisma";
-import { ProjectWithDomainProps } from "./types";
+import { ProjectProps, ProjectWithDomainProps } from "./types";
 
 export const getProjects = cache(async () => {
   const session = await getSession();
@@ -33,7 +33,7 @@ export const getProject = cache(async ({ slug }: { slug: string }) => {
   if (!session) {
     return null;
   }
-  return await prisma.project.findUnique({
+  return (await prisma.project.findUnique({
     where: {
       slug,
     },
@@ -57,8 +57,24 @@ export const getProject = cache(async ({ slug }: { slug: string }) => {
         },
       },
     },
-  });
+  })) as ProjectProps | null;
 });
+
+export const getPendingInvites = cache(
+  async ({ email, projectId }: { email: string; projectId: string }) => {
+    return await prisma.projectInvite.findUnique({
+      where: {
+        email_projectId: {
+          email,
+          projectId,
+        },
+      },
+      select: {
+        expires: true,
+      },
+    });
+  },
+);
 
 export const getLink = cache(
   async ({ domain, key }: { domain: string; key: string }) => {

@@ -2,7 +2,6 @@
 
 import useDomains from "@/lib/swr/use-domains";
 import useLinksCount from "@/lib/swr/use-links-count";
-import useProject from "@/lib/swr/use-project";
 import useUsers from "@/lib/swr/use-users";
 import { ModalContext } from "@/ui/modals/provider";
 import { Badge } from "@dub/ui";
@@ -15,7 +14,6 @@ export default function NavTabs() {
   const pathname = usePathname();
   const { slug } = useParams() as { slug?: string };
   const searchParams = useSearchParams();
-  const { loading, error } = useProject();
 
   const tabs = useMemo(() => {
     const isDomainAnalytics =
@@ -48,10 +46,8 @@ export default function NavTabs() {
     ];
   }, [pathname, slug, searchParams]);
 
-  const { verified, loading: loadingDomains } = useDomains();
+  const { verified, loading } = useDomains();
   const { data: count } = useLinksCount();
-
-  if (error) return null;
 
   return (
     <div className="scrollbar-hide mb-[-3px] flex h-12 items-center justify-start space-x-2 overflow-x-auto">
@@ -72,11 +68,9 @@ export default function NavTabs() {
           )}
         </Link>
       ))}
-      {slug &&
-        !loading &&
-        !error &&
-        !loadingDomains &&
-        (!verified || count === 0) && <OnboardingChecklist />}
+      {slug && !loading && (!verified || count === 0) && (
+        <OnboardingChecklist />
+      )}
     </div>
   );
 }

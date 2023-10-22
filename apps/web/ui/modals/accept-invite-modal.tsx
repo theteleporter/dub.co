@@ -3,17 +3,11 @@ import { LoadingDots, Logo, Modal } from "@dub/ui";
 import va from "@vercel/analytics";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  Dispatch,
-  SetStateAction,
-  useCallback,
-  useMemo,
-  useState,
-} from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 import { toast } from "sonner";
 import { mutate } from "swr";
 
-function AcceptInviteModal({
+export default function AcceptInviteModal({
   showAcceptInviteModal,
   setShowAcceptInviteModal,
 }: {
@@ -22,7 +16,6 @@ function AcceptInviteModal({
 }) {
   const { slug } = useParams() as { slug: string };
   const [accepting, setAccepting] = useState(false);
-  const { error } = useProject();
 
   return (
     <Modal
@@ -30,7 +23,7 @@ function AcceptInviteModal({
       setShowModal={setShowAcceptInviteModal}
       preventDefaultClose
     >
-      {error?.status === 409 ? (
+      {true ? (
         <>
           <div className="flex flex-col items-center justify-center space-y-3 border-b border-gray-200 px-4 py-4 pt-8 sm:px-16">
             <Logo />
@@ -95,26 +88,5 @@ function AcceptInviteModal({
         </>
       )}
     </Modal>
-  );
-}
-
-export function useAcceptInviteModal() {
-  const [showAcceptInviteModal, setShowAcceptInviteModal] = useState(false);
-
-  const AcceptInviteModalCallback = useCallback(() => {
-    return (
-      <AcceptInviteModal
-        showAcceptInviteModal={showAcceptInviteModal}
-        setShowAcceptInviteModal={setShowAcceptInviteModal}
-      />
-    );
-  }, [showAcceptInviteModal, setShowAcceptInviteModal]);
-
-  return useMemo(
-    () => ({
-      setShowAcceptInviteModal,
-      AcceptInviteModal: AcceptInviteModalCallback,
-    }),
-    [setShowAcceptInviteModal, AcceptInviteModalCallback],
   );
 }
