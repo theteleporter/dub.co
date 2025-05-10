@@ -23,7 +23,10 @@ import { Customer } from "@dub/prisma/client";
 import { nanoid } from "@dub/utils";
 import { waitUntil } from "@vercel/functions";
 import type Stripe from "stripe";
-import { getConnectedCustomer } from "./utils";
+import {
+  getConnectedCustomer,
+  updateCustomerWithStripeCustomerId,
+} from "./utils";
 
 // Handle event "checkout.session.completed"
 export async function checkoutSessionCompleted(event: Stripe.Event) {
@@ -36,7 +39,7 @@ export async function checkoutSessionCompleted(event: Stripe.Event) {
   const stripeCustomerEmail = charge.customer_details?.email;
   const invoiceId = charge.invoice as string;
 
-  let customer: Customer;
+  let customer: Customer | null = null;
   let existingCustomer: Customer | null = null;
   let clickEvent: z.infer<typeof clickEventSchemaTB> | null = null;
   let leadEvent: z.infer<typeof leadEventSchemaTB>;
@@ -133,51 +136,62 @@ export async function checkoutSessionCompleted(event: Stripe.Event) {
     }
 
     linkId = clickEvent.link_id;
-
-    // if it's not either a regular stripe checkout setup or a stripe checkout link,
-    // we skip the event
-  } else {
+  } else if (stripeCustomerId) {
     /*
-    for regular stripe checkout setup:
-    - if dubCustomerId not provided, we try to find the customer on the connected account
-    - if present:
-        - we update the customer with the stripe customerId
-        - we then find the lead event using the customer's unique ID on Dub
-        - the lead event will then be passed to the remaining logic to record a sale
-    - if not present, we skip the event
+    for regular stripe checkout setup (provided stripeCustomerId is present):
+    - if dubCustomerId is provided:
+      - we update the customer with the stripe customerId (for future events)
+    - else:
+      - we first try to see if the customer with the Stripe ID already exists in Dub
+        - if it does, great, we can use the customer found on Dub
+      - if it doesn't, we try to find the customer on the connected account
+      - if present:
+          - we update the customer with the stripe customerId
+          - we then find the lead event using the customer's unique ID on Dub
+          - the lead event will then be passed to the remaining logic to record a sale
+      - if not present, we skip the event
   */
-
-    if (!dubCustomerId) {
-      const connectedCustomer = await getConnectedCustomer({
-        stripeCustomerId,
+    if (dubCustomerId) {
+      customer = await updateCustomerWithStripeCustomerId({
         stripeAccountId,
-        livemode: event.livemode,
+        dubCustomerId,
+        stripeCustomerId,
       });
 
-      if (!connectedCustomer || !connectedCustomer.metadata.dubCustomerId) {
-        return `dubCustomerId not found in Stripe checkout session metadata (nor is it available on the connected customer ${stripeCustomerId}) and client_reference_id is not a dub_id, skipping...`;
+      if (!customer) {
+        return `dubCustomerId was provided but customer with dubCustomerId ${dubCustomerId} not found on Dub, skipping...`;
       }
-
-      dubCustomerId = connectedCustomer.metadata.dubCustomerId;
-    }
-
-    try {
-      // Update customer with stripeCustomerId if exists – for future events
-      customer = await prisma.customer.update({
+    } else {
+      existingCustomer = await prisma.customer.findUnique({
         where: {
-          projectConnectId_externalId: {
-            projectConnectId: stripeAccountId,
-            externalId: dubCustomerId,
-          },
-        },
-        data: {
           stripeCustomerId,
         },
       });
-    } catch (error) {
-      // Skip if customer not found
-      console.log(error);
-      return `Customer with dubCustomerId ${dubCustomerId} not found, skipping...`;
+
+      if (existingCustomer) {
+        dubCustomerId = existingCustomer.externalId ?? stripeCustomerId;
+        customer = existingCustomer;
+      } else {
+        const connectedCustomer = await getConnectedCustomer({
+          stripeCustomerId,
+          stripeAccountId,
+          livemode: event.livemode,
+        });
+
+        if (!connectedCustomer || !connectedCustomer.metadata.dubCustomerId) {
+          return `dubCustomerId not found in Stripe checkout session metadata (nor is it available in Dub, or on the connected customer ${stripeCustomerId}) and client_reference_id is not a dub_id, skipping...`;
+        }
+
+        dubCustomerId = connectedCustomer.metadata.dubCustomerId;
+        customer = await updateCustomerWithStripeCustomerId({
+          stripeAccountId,
+          dubCustomerId,
+          stripeCustomerId,
+        });
+        if (!customer) {
+          return `dubCustomerId was found on the connected customer ${stripeCustomerId} but customer with dubCustomerId ${dubCustomerId} not found on Dub, skipping...`;
+        }
+      }
     }
 
     // Find lead
@@ -186,6 +200,8 @@ export async function checkoutSessionCompleted(event: Stripe.Event) {
     );
 
     linkId = leadEvent.link_id;
+  } else {
+    return "No dubCustomerId or stripeCustomerId found in Stripe checkout session metadata, skipping...";
   }
 
   if (charge.amount_total === 0) {
