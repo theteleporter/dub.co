@@ -46,6 +46,7 @@ export const ProgramSchema = z.object({
 
 export const ProgramWithLanderDataSchema = ProgramSchema.extend({
   landerData: programLanderSchema.nullish(),
+  landerPublishedAt: z.date().nullish(),
 });
 
 export const updateProgramSchema = z.object({
@@ -107,6 +108,7 @@ export const ProgramEnrollmentSchema = z.object({
     .array(ProgramPartnerLinkSchema)
     .nullable()
     .describe("The partner's referral links in this program."),
+  totalCommissions: z.number().default(0),
   rewards: z.array(RewardSchema).nullish(),
   discount: DiscountSchema.nullish(),
   createdAt: z.date(),
