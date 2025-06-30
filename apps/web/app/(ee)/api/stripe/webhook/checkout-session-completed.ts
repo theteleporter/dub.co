@@ -6,7 +6,7 @@ import { WorkspaceProps } from "@/lib/types";
 import { redis } from "@/lib/upstash";
 import { Invite } from "@/lib/zod/schemas/invites";
 import { sendEmail } from "@dub/email";
-import { UpgradeEmail } from "@dub/email/templates/upgrade-email";
+import UpgradeEmail from "@dub/email/templates/upgrade-email";
 import { prisma } from "@dub/prisma";
 import { User } from "@dub/prisma/client";
 import { getPlanFromPriceId, log } from "@dub/utils";
@@ -62,12 +62,12 @@ export async function checkoutSessionCompleted(event: Stripe.Event) {
       plan: planName,
       usageLimit: plan.limits.clicks!,
       linksLimit: plan.limits.links!,
+      payoutsLimit: plan.limits.payouts!,
       domainsLimit: plan.limits.domains!,
       aiLimit: plan.limits.ai!,
       tagsLimit: plan.limits.tags!,
       foldersLimit: plan.limits.folders!,
       usersLimit: plan.limits.users!,
-      salesLimit: plan.limits.sales!,
     },
     select: {
       users: {
