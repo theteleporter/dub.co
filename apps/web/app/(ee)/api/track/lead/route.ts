@@ -95,7 +95,7 @@ export const POST = withWorkspace(
 
       if (!clickData) {
         const cachedClickData = await redis.get<ClickData>(
-          `clickCache:${clickId}`,
+          `clickIdCache:${clickId}`,
         );
 
         if (cachedClickData) {
@@ -241,14 +241,14 @@ export const POST = withWorkspace(
             }),
           ]);
 
-          if (link.programId && link.partnerId) {
+          if (link.programId && link.partnerId && customer) {
             await createPartnerCommission({
               event: "lead",
               programId: link.programId,
               partnerId: link.partnerId,
               linkId: link.id,
               eventId: leadEventId,
-              customerId: customerId,
+              customerId: customer.id,
               quantity: eventQuantity ?? 1,
             });
           }

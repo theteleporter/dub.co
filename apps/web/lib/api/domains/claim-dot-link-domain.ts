@@ -1,16 +1,11 @@
 import { DubApiError } from "@/lib/api/errors";
 import { createLink } from "@/lib/api/links";
-import { qstash } from "@/lib/cron";
 import { registerDomain } from "@/lib/dynadot/register-domain";
 import { WorkspaceWithUsers } from "@/lib/types";
 import { sendEmail } from "@dub/email";
-import { DomainClaimed } from "@dub/email/templates/domain-claimed";
+import DomainClaimed from "@dub/email/templates/domain-claimed";
 import { prisma } from "@dub/prisma";
-import {
-  ACME_WORKSPACE_ID,
-  APP_DOMAIN_WITH_NGROK,
-  DEFAULT_LINK_PROPS,
-} from "@dub/utils";
+import { DEFAULT_LINK_PROPS } from "@dub/utils";
 import { get } from "@vercel/edge-config";
 import { waitUntil } from "@vercel/functions";
 import { addDomainToVercel } from "./add-domain-vercel";
@@ -20,29 +15,33 @@ export async function claimDotLinkDomain({
   domain,
   workspace,
   userId,
+  skipWorkspaceChecks = false,
 }: {
   domain: string;
   workspace: WorkspaceWithUsers;
   userId: string;
+  skipWorkspaceChecks?: boolean; // when used in /api/domains/register
 }) {
-  if (workspace.plan === "free")
-    throw new DubApiError({
-      code: "forbidden",
-      message: "Free workspaces cannot register .link domains.",
-    });
+  if (!skipWorkspaceChecks) {
+    if (workspace.plan === "free")
+      throw new DubApiError({
+        code: "forbidden",
+        message: "Free workspaces cannot register .link domains.",
+      });
 
-  if (!workspace.stripeId) {
-    throw new DubApiError({
-      code: "forbidden",
-      message: "You cannot register a .link domain on a free trial.",
-    });
-  }
+    if (!workspace.stripeId) {
+      throw new DubApiError({
+        code: "forbidden",
+        message: "You cannot register a .link domain on a free trial.",
+      });
+    }
 
-  if (workspace.id !== ACME_WORKSPACE_ID && workspace.dotLinkClaimed) {
-    throw new DubApiError({
-      code: "forbidden",
-      message: "Workspace is limited to one free .link domain.",
-    });
+    if (workspace.dotLinkClaimed) {
+      throw new DubApiError({
+        code: "forbidden",
+        message: "You are limited to one free .link domain per workspace.",
+      });
+    }
   }
 
   const customDomainTerms = await get("customDomainTerms");
@@ -65,11 +64,15 @@ export async function claimDotLinkDomain({
   const [response, totalDomains, matchingUnverifiedDomain] = await Promise.all([
     // register the domain
     registerDomain({ domain }),
+
+    // count the number of domains in the workspace
     prisma.domain.count({
       where: {
         projectId: workspace.id,
       },
     }),
+
+    // find the unverified domain that matches the domain
     prisma.domain.findFirst({
       where: {
         slug: domain,
@@ -88,7 +91,6 @@ export async function claimDotLinkDomain({
 
     await markDomainAsDeleted({
       domain: slug,
-      workspaceId: projectId!,
     });
   }
 
@@ -104,12 +106,13 @@ export async function claimDotLinkDomain({
         registeredDomain: {
           create: {
             slug: domain,
-            expiresAt: new Date(response.RegisterResponse.Expiration || ""),
+            expiresAt: new Date(response.expiration || ""),
             projectId: workspace.id,
           },
         },
       },
     }),
+
     // Create the root link
     createLink({
       ...DEFAULT_LINK_PROPS,
@@ -124,18 +127,14 @@ export async function claimDotLinkDomain({
 
   waitUntil(
     Promise.all([
-      qstash.publishJSON({
-        url: `${APP_DOMAIN_WITH_NGROK}/api/cron/domains/configure-dns`,
-        // delete after 3 mins
-        delay: 3 * 60,
-        body: {
-          domain,
-        },
-      }),
       // add domain to Vercel
       addDomainToVercel(domain),
+
       // send email to workspace owners
-      sendDomainClaimedEmails({ workspace, domain }),
+      !skipWorkspaceChecks
+        ? sendDomainClaimedEmails({ workspace, domain })
+        : Promise.resolve(),
+
       // update workspace to set dotLinkClaimed to true
       prisma.project.update({
         where: {

@@ -1,7 +1,9 @@
 "use server";
 
+import { recordAuditLog } from "@/lib/api/audit-logs/record-audit-log";
 import { getDefaultProgramIdOrThrow } from "@/lib/api/programs/get-default-program-id-or-throw";
 import { getFolderOrThrow } from "@/lib/folder/get-folder-or-throw";
+import { DUB_MIN_PAYOUT_AMOUNT_CENTS } from "@/lib/partners/constants";
 import { isStored, storage } from "@/lib/storage";
 import { programLanderSchema } from "@/lib/zod/schemas/program-lander";
 import { prisma } from "@dub/prisma";
@@ -25,7 +27,7 @@ const schema = updateProgramSchema.partial().extend({
 export const updateProgramAction = authActionClient
   .schema(schema)
   .action(async ({ parsedInput, ctx }) => {
-    const { workspace } = ctx;
+    const { workspace, user } = ctx;
     const {
       name,
       logo,
@@ -71,7 +73,7 @@ export const updateProgramAction = authActionClient
         : null,
     ]);
 
-    await prisma.program.update({
+    const updatedProgram = await prisma.program.update({
       where: {
         id: programId,
       },
@@ -81,6 +83,7 @@ export const updateProgramAction = authActionClient
         wordmark: wordmarkUrl ?? undefined,
         brandColor,
         landerData: landerData === null ? Prisma.JsonNull : landerData,
+        landerPublishedAt: landerData ? new Date() : undefined,
         domain,
         url,
         linkStructure,
@@ -89,7 +92,10 @@ export const updateProgramAction = authActionClient
         termsUrl,
         cookieLength,
         holdingPeriodDays,
-        minPayoutAmount,
+        minPayoutAmount:
+          workspace.plan === "enterprise"
+            ? minPayoutAmount
+            : DUB_MIN_PAYOUT_AMOUNT_CENTS,
         defaultFolderId,
       },
     });
@@ -124,6 +130,21 @@ export const updateProgramAction = authActionClient
               revalidatePath(`/partners.dub.co/${program.slug}/apply/success`),
             ]
           : []),
+
+        recordAuditLog({
+          workspaceId: workspace.id,
+          programId: program.id,
+          action: "program.updated",
+          description: `Program ${program.name} updated`,
+          actor: user,
+          targets: [
+            {
+              type: "program",
+              id: program.id,
+              metadata: updatedProgram,
+            },
+          ],
+        }),
       ]),
     );
   });

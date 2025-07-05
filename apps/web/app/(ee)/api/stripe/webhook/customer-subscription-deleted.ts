@@ -1,4 +1,5 @@
 import { deleteWorkspaceFolders } from "@/lib/api/folders/delete-workspace-folders";
+import { tokenCache } from "@/lib/auth/token-cache";
 import { recordLink } from "@/lib/tinybird";
 import { redis } from "@/lib/upstash";
 import { webhookCache } from "@/lib/webhook/cache";
@@ -52,6 +53,11 @@ export async function customerSubscriptionDeleted(event: Stripe.Event) {
           },
         },
       },
+      restrictedTokens: {
+        select: {
+          hashedKey: true,
+        },
+      },
     },
   });
 
@@ -87,12 +93,12 @@ export async function customerSubscriptionDeleted(event: Stripe.Event) {
         plan: "free",
         usageLimit: FREE_PLAN.limits.clicks!,
         linksLimit: FREE_PLAN.limits.links!,
+        payoutsLimit: FREE_PLAN.limits.payouts!,
         domainsLimit: FREE_PLAN.limits.domains!,
         aiLimit: FREE_PLAN.limits.ai!,
         tagsLimit: FREE_PLAN.limits.tags!,
         foldersLimit: FREE_PLAN.limits.folders!,
         usersLimit: FREE_PLAN.limits.users!,
-        salesLimit: FREE_PLAN.limits.sales!,
         paymentFailedAt: null,
         foldersUsage: 0,
       },
@@ -176,6 +182,11 @@ export async function customerSubscriptionDeleted(event: Stripe.Event) {
       data: {
         webhookEnabled: false,
       },
+    }),
+
+    // expire tokens cache
+    tokenCache.expireMany({
+      hashedKeys: workspace.restrictedTokens.map(({ hashedKey }) => hashedKey),
     }),
   ]);
 
